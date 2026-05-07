@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: 'postgres:16'
+    ## 数据库建议始终保持运行
+    restart: always
+    environment:
+      - 'POSTGRES_DB=mydatabase'
+      - 'POSTGRES_PASSWORD=${DB_PASSWORD}' # 使用变量 .evn中的变量
+      - 'POSTGRES_USER=myuser'
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydatabase"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      options:
+        #设置日志文件的最大容量和轮转数量。
+        max-size: "10m" # 每个日志文件最大 10MB
+        max-file: "3" # 最多保留 3 个文件
+
+  app:
+    build:
+      context: .
+      #dockerfile: Dockerfile
+      # 指定dockerfile
+      dockerfile: Dockerfile- multiple-not-root-user
+    image: profile_bankend:1.0
+    ## # 只有在非正常退出时才重启
+    restart: on-failure
+    depends_on:
+      ## pg正常启动且健康运行
+      postgres:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=8081
+  # ip使用postgres代替ip
+      - DB_URL=jdbc:postgresql://postgres:5432/mydatabase
+      - DB_USER=myuser
+      - DB_PASSWORD=${DB_PASSWORD} # 使用变量
+    ports:
+      - '8081:8081'
+    deploy:
+      ## 限定容器最多能用多少资源。
+      resources:
+        limits:
+          memory: 4G
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:

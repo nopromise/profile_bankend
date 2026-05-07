@@ -1,0 +1,59 @@
+# ==========================================
+# 阶段一：构建阶段 (命名为 builder)
+# ==========================================
+# 使用包含 Maven 和 JDK 的重量级镜像
+## 给这个临时的构建容器打了个标签，叫 builder（名字你可以随便起，叫 kitchen 也行）。
+## 为什么需要：因为到了后面的第二阶段，我们需要从这个阶段“偷”东西，有了名字才好精确锁定目标。
+FROM maven:3.9.4-eclipse-temurin-21 AS builder
+
+# 设置工作目录 创建并进入一个工作目录（相当于 mkdir /build && cd /build）
+## 这指定了接下来的命令（比如 COPY 和 RUN）都在容器内部的 /build 文件夹下执行。
+WORKDIR /build
+
+# 先只拷贝 pom.xml (利用 Docker 缓存机制，只要 pom 没变，就不重新下载依赖)
+COPY pom.xml .
+# 这一步会下载所有依赖，耗时较长，但会被缓存
+# Docker 构建镜像是分层缓存的。一般我们在写代码时，修改 Java 源码的频率极高，但修改 pom.xml 增删依赖的频率很低
+# 我们先 COPY pom.xml .，然后跑这一步。只要你的 pom.xml 不变，Docker 以后每次构建都会直接使用这一步的缓存，
+# 不用重新下载半个互联网的依赖，你的构建速度会从几分钟直接飙升到几秒钟！
+RUN mvn dependency:go-offline
+
+# 拷贝真正的源代码
+COPY src ./src
+
+# 执行打包命令，跳过测试以加快速度
+RUN mvn clean package -DskipTests
+
+# ==========================================
+# 阶段二：运行阶段 (最终生成的纯净镜像)
+# ==========================================
+
+# ==========================================
+# 阶段二：运行阶段 (最终生成的纯净镜像)
+# ==========================================
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# 【第 1 步：创建非 root 用户和用户组】
+# 在 Alpine Linux 中，我们使用 addgroup 和 adduser 命令。
+# -S 表示创建一个“系统级”账户（通常没有登录密码，专门用来跑服务的）。
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# 把第一阶段打好的 jar 包复制过来
+COPY --from=builder /build/target/*.jar app.jar
+
+# 【第 2 步：修改文件所有权】
+# 默认情况下，COPY 过来的文件属于 root。
+# 我们必须把 app.jar 的所有者改成刚刚创建的 appuser，否则它可能没有权限执行或读取。
+RUN chown appuser:appgroup app.jar
+
+# 【第 3 步：切换用户】
+# 这一句是魔法！从这行代码往后的所有指令（包括 ENTRYPOINT），
+# Docker 都会以 appuser 的身份去执行，而不是 root。
+USER appuser:appgroup
+
+# 设置时区（非特权用户通常可以读取时区文件，但如果在上一步前设置会更稳妥）
+EXPOSE 8081
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
