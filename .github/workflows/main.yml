@@ -23,15 +23,15 @@ jobs:
       - name: Login to Aliyun ACR
         uses: aliyun/acr-login@v1
         with:
-          login-server: ${{ secrets.REGISTRY }}
-          username: ${{ secrets.ALIBABA_CLOUD_USERNAME }}
+          login-server: ${{ vars.REGISTRY }}
+          username: ${{ vars.ALIBABA_CLOUD_USERNAME }}
           password: ${{ secrets.ALIBABA_CLOUD_PASSWORD }}
 
       # 步骤三：构建镜像并推送到云端
       # 注意：github.sha 是这次提交的唯一 ID，防止镜像版本混乱
       - name: Build and Push Docker Image
         run: |
-          IMAGE_NAME=${{ secrets.REGISTRY }}/finn_test/profile_bankend
+          IMAGE_NAME=${{ vars.REGISTRY }}/finn_test/profile_bankend
           IMAGE_TAG=${{ github.sha }}
           
           # 构建镜像
