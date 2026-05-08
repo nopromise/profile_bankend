@@ -21,7 +21,7 @@ jobs:
       # 步骤二：登录阿里云镜像仓库
       # 这里用到了我们之前配置在 Secrets 里的变量
       - name: Login to Aliyun ACR
-        uses: aliyun/acr-login-action@v1
+        uses: aliyun/acr-login@v1
         with:
           login-server: ${{ secrets.REGISTRY }}
           username: ${{ secrets.ALIBABA_CLOUD_USERNAME }}
