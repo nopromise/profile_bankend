@@ -21,6 +21,10 @@ public class UserProfileController {
         this.userProfileService = userProfileService;
     }
 
+    @GetMapping("/hello/k8s")
+    public String  hello(@PathVariable Long id) {
+        return "hello k8888888s";
+    }
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UserProfile create(@RequestBody UserProfileRequest request) {
