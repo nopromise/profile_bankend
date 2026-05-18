@@ -21,8 +21,8 @@ public class UserProfileController {
         this.userProfileService = userProfileService;
     }
 
-    @GetMapping("/hello/k8s")
-    public String  hello(@PathVariable Long id) {
+    @GetMapping("/hello")
+    public String  hello() {
         return "hello k8888888s";
     }
     @PostMapping
