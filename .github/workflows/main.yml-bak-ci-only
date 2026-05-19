@@ -1,0 +1,44 @@
+# 1. 脚本的名字
+name: Docker Build and Push to Aliyun
+
+# 2. 触发条件：当你把代码 push 到 main 分支时，启动这个任务
+on:
+  push:
+    branches:
+      - master
+
+# 3. 具体要做什么任务
+jobs:
+  build-and-push:
+    # 告诉 GitHub 给我一台最新的 Ubuntu 虚拟机来跑这个任务
+    runs-on: ubuntu-latest
+
+    steps:
+      # 步骤一：把你的代码从 GitHub 仓库下载到这台虚拟机上
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 步骤二：登录阿里云镜像仓库
+      # 这里用到了我们之前配置在 Secrets 里的变量
+      - name: Login to Aliyun ACR
+        uses: aliyun/acr-login@v1
+        with:
+          login-server: ${{ vars.REGISTRY }}
+          username: ${{ vars.ALIBABA_CLOUD_USERNAME }}
+          password: ${{ secrets.ALIBABA_CLOUD_PASSWORD }}
+
+      # 步骤三：构建镜像并推送到云端
+      # 注意：github.sha 是这次提交的唯一 ID，防止镜像版本混乱
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_NAME=${{ vars.REGISTRY }}/finn_test/profile_bankend
+          IMAGE_TAG=${{ github.sha }}
+          
+          # 构建镜像
+          docker build -t $IMAGE_NAME:$IMAGE_TAG .
+          # 给镜像打一个 latest 标签，方便下载最新的
+          docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
+          
+          # 推送到阿里云
+          docker push $IMAGE_NAME:$IMAGE_TAG
+          docker push $IMAGE_NAME:latest
