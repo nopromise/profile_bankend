@@ -47,34 +47,51 @@ jobs:
   # ==========================================
   # Job 2: 衔接阶段 —— 自动化修改 K8s 配置仓库 (CD 的桥梁)
   # ==========================================
+  # ==========================================
+  # Job 2: 衔接阶段 —— 自动化修改 K8s 配置仓库 (CD 的桥梁)
+  # ==========================================
   update-k8s-manifest:
     needs: build-and-push # 必须等上面镜像推成功后，才执行本任务
     runs-on: ubuntu-latest
     steps:
-      # 步骤一：克隆你的【K8s 配置仓库】（注意：填入你自己的 GitHub 账号和新仓库名）
+      # 步骤一：克隆你的【K8s 配置仓库】
       - name: Checkout Manifest Repo
         uses: actions/checkout@v3
         with:
-          repository: 'nopromise/profile-manifests' # 👈 修改为你的配置仓库路径
-          token: ${{ secrets.MY_GITHUB_TOKEN }} # 👈 动用我们刚才配置的超级通行证
+          repository: 'nopromise/profile-manifests' # 👈 确保这里是你的配置仓库路径
+          token: ${{ secrets.MY_GITHUB_TOKEN }}
 
-      # 步骤二：使用 Linux 的 sed 命令，把 YAML 里的旧标签/占位符替换成最新的短 SHA 标签
-      - name: Update Image Tag in YAML
+      # 步骤二：使用大厂标准的 yq 工具，精准定位并修改 YAML 节点值
+      - name: Update Image Tag using yq
         run: |
           NEW_TAG=${{ needs.build-and-push.outputs.image_tag }}
           TARGET_FILE="k8s/backend-k8s.yaml"
+          FULL_IMAGE_PATH="${{ vars.REGISTRY }}/finn_test/profile_bankend:$NEW_TAG"
           
-          echo "开始将 $TARGET_FILE 中的镜像标签更新为: $NEW_TAG"
+          echo "🎯 目标新镜像完整路径: $FULL_IMAGE_PATH"
           
-          # 使用 sed 正则替换镜像行：找到 profile_bankend:后面的任何字符，替换为新的 $NEW_TAG
-          sed -i "s|image: ${{ vars.REGISTRY }}/finn_test/profile_bankend:.*|image: ${{ vars.REGISTRY }}/finn_test/profile_bankend:$NEW_TAG|g" $TARGET_FILE
+          # 安装 yq 工具（Ubuntu 虚拟机里最快、最稳的安装方式）
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+          
+          # 【核心魔术】：利用 yq 精准修改第一个 document (Deployment) 的镜像地址
+          # 语法解释：(select( .kind == "Deployment" ) 表示只改 Deployment，不碰下面的 Service
+          yq -i '(select(.kind == "Deployment") | .spec.template.spec.containers[0].image) = "'$FULL_IMAGE_PATH'"' $TARGET_FILE
+          
+          echo "==== 修改后的 YAML 文件内容预览 ===="
+          cat $TARGET_FILE
 
-      # 步骤三：把被修改后的部署 YAML 文件，自动 Commit 并 Push 回你的配置仓库
+      # 步骤三：安全提交，防止 nothing to commit 报错
       - name: Commit and Push to Manifest Repo
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
           git add k8s/backend-k8s.yaml
-          git commit -m "chore: 自动化更新后端镜像标签至 ${{ needs.build-and-push.outputs.image_tag }} [skip ci]"
-          git push origin main # 或者 master，取决于你配置仓库的主分支名叫什么
+          
+          # 检查文件是否真的被修改了
+          if git diff --staged --quiet; then
+            echo "📢 检查完毕：本地生成的镜像 Tag 与配置仓库中的完全一致，无需重复提交！"
+          else
+            git commit -m "chore: 自动化更新后端镜像标签至 ${{ needs.build-and-push.outputs.image_tag }} [skip ci]"
+            git push origin main
+          fi
