@@ -25,6 +25,11 @@ public class UserProfileController {
     public String  hello() {
         return "hello k88888112288s";
     }
+    @GetMapping("/hi")
+    public String  hi() {
+        return "hi---- k88888112288s";
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UserProfile create(@RequestBody UserProfileRequest request) {
