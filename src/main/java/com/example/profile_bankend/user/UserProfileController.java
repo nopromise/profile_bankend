@@ -25,10 +25,20 @@ public class UserProfileController {
     public String  hello() {
         return "hello k88888112288s";
     }
+
+
     @GetMapping("/hii")
     public String  hi() {
         return "hi---- k88888112288s";
     }
+
+
+    @GetMapping("/comeon")
+    public String  comeon() {
+        return "comeon---- k88888112288s";
+    }
+
+
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -38,6 +48,8 @@ public class UserProfileController {
         }
         return userProfileService.create(request);
     }
+
+
 
     @GetMapping("/{id}")
     public UserProfile getById(@PathVariable Long id) {
