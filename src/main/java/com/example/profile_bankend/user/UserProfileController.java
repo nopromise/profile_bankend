@@ -25,7 +25,7 @@ public class UserProfileController {
     public String  hello() {
         return "hello k88888112288s";
     }
-    @GetMapping("/hi")
+    @GetMapping("/hii")
     public String  hi() {
         return "hi---- k88888112288s";
     }
