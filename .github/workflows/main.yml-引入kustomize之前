@@ -43,44 +43,55 @@ jobs:
           # 保留你的 latest 备份，但 K8s 之后将不再依赖它
           docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
           docker push $IMAGE_NAME:latest
+
   # ==========================================
-  # Job 2: 自动化修改 K8s 配置仓库 (Kustomize 升级版)
+  # Job 2: 衔接阶段 —— 自动化修改 K8s 配置仓库 (CD 的桥梁)
+  # ==========================================
+  # ==========================================
+  # Job 2: 衔接阶段 —— 自动化修改 K8s 配置仓库 (CD 的桥梁)
   # ==========================================
   update-k8s-manifest:
-    needs: build-and-push
+    needs: build-and-push # 必须等上面镜像推成功后，才执行本任务
     runs-on: ubuntu-latest
     steps:
+      # 步骤一：克隆你的【K8s 配置仓库】
       - name: Checkout Manifest Repo
         uses: actions/checkout@v3
         with:
-          repository: 'nopromise/profile-manifests' # 你的配置仓库
+          repository: 'nopromise/profile-manifests' # 👈 确保这里是你的配置仓库路径
           token: ${{ secrets.MY_GITHUB_TOKEN }}
 
-      # 【核心进化】：直接使用原生 Kustomize 命令，精准更新 prod 环境的镜像标签
-      - name: Update Image Tag via Kustomize
+      # 步骤二：使用大厂标准的 yq 工具，精准定位并修改 YAML 节点值
+      - name: Update Image Tag using yq
         run: |
           NEW_TAG=${{ needs.build-and-push.outputs.image_tag }}
+          TARGET_FILE="k8s/backend-k8s.yaml"
+          FULL_IMAGE_PATH="${{ vars.REGISTRY }}/finn_test/profile_bankend:$NEW_TAG"
           
-          # 进入生产环境目录
-          cd k8s/overlays/prod
+          echo "🎯 目标新镜像完整路径: $FULL_IMAGE_PATH"
           
-          # 运行大厂标准命令：完美修改 kustomization.yaml 里的 newTag 属性
-          kustomize edit set image crpi-0b73awcs10m9dovb.cn-qingdao.personal.cr.aliyuncs.com/finn_test/profile_bankend=crpi-0b73awcs10m9dovb.cn-qingdao.personal.cr.aliyuncs.com/finn_test/profile_bankend:$NEW_TAG
+          # 安装 yq 工具（Ubuntu 虚拟机里最快、最稳的安装方式）
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
           
-          echo "==== 检查修改后的 prod kustomization.yaml ===="
-          cat kustomization.yaml
+          # 【核心魔术】：利用 yq 精准修改第一个 document (Deployment) 的镜像地址
+          # 语法解释：(select( .kind == "Deployment" ) 表示只改 Deployment，不碰下面的 Service
+          yq -i '(select(.kind == "Deployment") | .spec.template.spec.containers[0].image) = "'$FULL_IMAGE_PATH'"' $TARGET_FILE
+          
+          echo "==== 修改后的 YAML 文件内容预览 ===="
+          cat $TARGET_FILE
 
+      # 步骤三：安全提交，防止 nothing to commit 报错
       - name: Commit and Push to Manifest Repo
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 此时我们只需要追踪控制文件 kustomization.yaml 的改动即可
-          git add k8s/overlays/prod/kustomization.yaml
+          git add k8s/backend-k8s.yaml
           
+          # 检查文件是否真的被修改了
           if git diff --staged --quiet; then
-            echo "📢 镜像版本未发生变化，跳过本次提交。"
+            echo "📢 检查完毕：本地生成的镜像 Tag 与配置仓库中的完全一致，无需重复提交！"
           else
-            git commit -m "chore: 自动升级生产环境镜像至 ${{ needs.build-and-push.outputs.image_tag }} [skip ci]"
+            git commit -m "chore: 自动化更新后端镜像标签至 ${{ needs.build-and-push.outputs.image_tag }} [skip ci]"
             git push origin main
           fi
