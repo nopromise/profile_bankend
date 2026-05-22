@@ -21,13 +21,13 @@ public class UserProfileController {
         this.userProfileService = userProfileService;
     }
 
-    @GetMapping("/hello")
+    @GetMapping("/hello111")
     public String  hello() {
         return "hello k88888112288s";
     }
 
 
-    @GetMapping("/haha")
+    @GetMapping("/ha")
     public String  haha() {
         return "haha---- k88888112288s";
     }
